@@ -4,11 +4,29 @@ import Chat from '../components/Chat.jsx';
 
 ---
 
-<Layout  title="Welcome to File Transfer.">
-	<main>
+<Layout   title="Welcome to File Transfer.">
+	<main >
 		
 			<Chat client:only
 			/>
+			<div
+			id="planet"
+			class="flex w-[75%] min-h-[250px] max-h-[50vh] max-w-full md:max-h-full self-start sm:self-auto sm:justify-self-start md:h-2/3 md:max-w-[515px]" 
+		  >
+			<!-- TODO: import Web Component from npm package, already installed via https://www.npmjs.com/package/@splinetool/viewer -->
+			<!-- Use "perspective" for your scene! -->
+			<script
+			  type="module"
+			  src="https://unpkg.com/@splinetool/viewer@0.9.443/build/spline-viewer.js"
+			></script>
+			<spline-viewer
+			  url="https://prod.spline.design/8tO9NQOC8Shteqek/scene.splinecode"
+			  background="transparent"
+			  width="100%"
+			  height="100%"
+			  class="grow"
+			 ></spline-viewer>
+		  </div>
 	
 	</main>
 </Layout>
