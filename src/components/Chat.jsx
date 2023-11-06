@@ -132,12 +132,12 @@ const Chat = () => {
             ) : (
                 <div className="w-6 h-6 rounded-full notification-circle bg-transparent"></div>
             )}
-            <div className="mb-4 flex flex-col justify-between items-center mb-4">
+            <div className="mb-4 flex flex-col justify-between items-center">
                 <div className="flex flex-col flex-grow gap-2 text-gray-800  dark:text-gray-400">
                     Generador de Tokens: <strong className="text-gray-800  dark:text-gray-400">{peerId}</strong>
                 </div>
                 <button
-                    className="border border-green-200 bg-green-300 text-green-800 dark:bg-green-800 hover:text-green-200 dark:text-green-200 px-4 py-2  mt-4 rounded bg-green-300 text-white px-4 py-2 rounded hover:bg-green-700 focus:bg-green-500 transition duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
+                    className="border border-green-200  dark:bg-green-800 hover:text-green-200 dark:text-green-200 px-4 py-2  mt-4 rounded bg-green-300 text-white px-4 py-2 rounded hover:bg-green-700 focus:bg-green-500 transition duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
                     onClick={copiarIdAlPortapapeles}
                 >
                     Copiar ID
