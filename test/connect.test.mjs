@@ -88,6 +88,10 @@ test('publish: chat validated, game.event only from the host, payload checks', a
   assert.equal((await api('publish', { body: { code, kind: 'game.event', data: { type: 'state' } }, token: guest.token })).status, 403);
   assert.equal((await api('publish', { body: { code, kind: 'player.input', data: [1, 2] }, token: guest.token })).status, 400);
   assert.equal((await api('publish', { body: { code, kind: 'admin.drop', data: {} }, token: guest.token })).status, 400);
+  const big = 'x'.repeat(3000);
+  assert.equal((await api('publish', { body: { code, kind: 'player.input', data: { type: 'note', big } }, token: guest.token })).status, 413);
+  assert.equal((await api('publish', { body: { code, kind: 'player.input', data: { type: 'rtc.signal', sdp: big } }, token: guest.token })).status, 201);
+  assert.equal((await api('publish', { body: { code, kind: 'player.input', data: { type: 'rtc.signal', sdp: 'x'.repeat(9000) } }, token: guest.token })).status, 413);
   assert.equal((await api('publish', { body: { code, kind: 'game.event', data: { type: 'state', vars: { luz: true } } }, token: s.host })).status, 201);
   const ev = await api('events', { query: { code, since: '0' }, token: guest.token });
   const chat = ev.json.events.find((e) => e.kind === 'chat.message');
