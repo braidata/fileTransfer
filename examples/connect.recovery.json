@@ -1,0 +1,26 @@
+{
+  "schema": "braidata.connect.v1",
+  "room": {
+    "persistent": true,
+    "hostRecovery": {
+      "enabled": true,
+      "identity": "authenticated-owner",
+      "sameCode": true,
+      "snapshot": true
+    }
+  },
+  "auth": {
+    "backend": "neon-postgres",
+    "mode": "admin-bootstrap"
+  },
+  "transport": {
+    "control": "vercel-functions",
+    "events": "polling",
+    "realtime": "peerjs-experimental"
+  },
+  "events": [
+    "chat.message",
+    "player.input",
+    "game.event"
+  ]
+}
