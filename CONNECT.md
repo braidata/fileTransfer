@@ -1,38 +1,70 @@
-# Braidata Connect (dev-braidata-connect)
+# Braidata Connect
 
-A reusable real-time connectivity backend and API playground built on the existing `braidata/fileTransfer` repository.
+Rooms, identities, chat, shared events and snapshots for multiplayer experiences. There are two backends in this repo:
 
-## Start
+| Backend | Where | Status |
+|---|---|---|
+| **Connect Cloud**: `api/connect.js` → `lib/connect-core.js` | Vercel Function + Neon (Postgres) | The one in production (`braidataconnect.vercel.app`). Persistent, authenticated. Consumed by Experience Creator. |
+| Legacy playground server: `server/connect.mjs` | Long-running Node process, in memory | Development preview only (SSE, no auth, no persistence). Not used by Experience Creator. |
 
-Requires Node.js 20+.
+## Connect Cloud API
+
+One endpoint: `/api/connect?action=<action>`. JSON in and out. Errors are `{ "error": "CODE" }` with an HTTP status.
+
+Auth: `Authorization: Bearer <JWT>` (HS256, 7 days). Hosts/admins get a user token from `login`; guests get a **room-scoped** token from `guest-join` (`{ room, role: 'guest' }`) that only works in that room.
+
+| Action | Method | Who | Notes |
+|---|---|---|---|
+| `health` | GET | anyone | `{ ok, storage, service }` |
+| `bootstrap` | POST | holder of `CONNECT_BOOTSTRAP_KEY` | creates the first admin once (409 afterwards) |
+| `login` | POST | admin / host | `{ email, password }` → `{ token, email, role }`; guests cannot log in |
+| `guest-join` | POST | anyone | `{ code, name }` → `{ code, name, role:'guest', userId, token }`; announces a member event |
+| `me` | GET | token | `{ user: { id, email, role } }` |
+| `admin-users`, `admin-create-user`, `admin-delete-user` | GET/POST | admin | user management. Hosts are provisioned by an admin (`admin-create-user {email,password}` → role `host`). Not for gameplay UIs. |
+| `create` | POST | admin / host | `{ title, name }` → `{ code, title }` (code `^[A-F0-9]{8}$`) |
+| `join` | POST | admin / host | joins a room as a member (guests use `guest-join`) |
+| `room` | GET | member | `{ room, host, role, currentUser, players[{user_id,name,role,idle}] }` |
+| `leave` | POST | member except owner | removes the membership; announces a member event |
+| `resume` | POST | owner | bumps `epoch`, returns `{ code, epoch, snapshot }` (host recovery) |
+| `snapshot` | POST | owner | `{ state: object }` ≤ 16000 chars |
+| `kick` | POST | owner | `{ userId }`; the member is removed (its token stops working in the room); announces a member event |
+| `publish` | POST | member | `{ kind, data: object }` ≤ 2000 chars. `kind` ∈ `chat.message` (`data.text` 1..500), `player.input` (any member), `game.event` (**owner only**). Rate limit: `CONNECT_RATE_LIMIT` (default 40) per member and room in 10 s → 429 |
+| `events` | GET | member | `?code&since=<cursor>` → `{ events[{id,user_id,kind,data,created_at,sender_name}], next, epoch, owner, presence[{user_id,name,role,idle}] }`, at most 100 per call. Polling it marks the caller as seen; `idle` = seconds since a member last polled (`null` = never) |
+
+Member events are `game.event` with `data = { type: 'connect.member', action: 'join'|'leave'|'kick', userId, name }`.
+
+Events are stored as `body` (jsonb) and returned as `data`; clients should read `data` and fall back to `body` for old rows.
+
+### Environment
+
+| Variable | Required | Notes |
+|---|---|---|
+| `DATABASE_URL` | yes | Neon connection string. Server-side only, never in a browser or an exported file. |
+| `CONNECT_AUTH_SECRET` | yes | ≥ 32 chars, signs the JWTs. Rotating it signs everybody out. |
+| `CONNECT_BOOTSTRAP_KEY` | for the first admin | Remove it after bootstrapping. |
+| `CONNECT_ORIGINS` | no | Comma-separated CORS allowlist (`*` allows all). Default: `alterverse.art`, `www.alterverse.art`, `braidataconnect.vercel.app` and localhost dev ports. |
+| `CONNECT_RATE_LIMIT` | no | Events per member and room per 10 s (min 5, default 40). |
+
+### Local stack and tests
 
 ```bash
-cd server && npm start
-# separate terminal, repository root:
-npm install && npm run dev
+npm install
+npm test                 # protocol tests: the real handler over HTTP on an in-process Postgres (PGlite)
+npm run connect:local    # API on http://127.0.0.1:8788/api/connect + PeerJS server on ws://127.0.0.1:9000/peerjs
 ```
 
-Open the Astro development URL in **two browsers or tabs**. Set API endpoint to `http://localhost:8787`. Create a room in tab A, copy its code, and join in tab B. Send chat messages, publish player transforms, and inspect events. Microphone requires browser permission and secure context (localhost works). Enable microphone on both tabs for WebRTC preview.
+`scripts/connect-local.mjs` runs the same `lib/connect-core.js` as the Vercel Function, replacing Neon with PGlite and adding a PeerJS signaling server for WebRTC tests. `CONNECT_SEED_ADMIN=email:password` creates the admin at start.
 
-## API
-- `GET /health`
-- `POST /api/rooms` — name, title, maxPlayers
-- `POST /api/rooms/:code/join` — name
-- `GET /api/rooms/:code` — public presence snapshot
-- `GET /api/rooms/:code/events?token=TOKEN` — SSE
-- `POST /api/rooms/:code/message` — text
-- `POST /api/rooms/:code/state` — x, y, z, ry, ready
-- `POST /api/rooms/:code/peer` — peerId
-- `POST /api/rooms/:code/game-event` — kind, data
-- `POST /api/rooms/:code/leave`
+### Realtime (voice / movement)
 
-POST actions after join require the `x-connect-token` header; except create/join. The schema example is in `examples/connect.coop.json` and is **proposed**, not implemented as an import feature.
+Connect Cloud is HTTP: chat, events and snapshots are persisted and **polled**. It is not a transport for high-frequency movement. Clients use WebRTC (PeerJS) peer links for movement and voice, announcing their peer id through `player.input` (`{ type: 'voice.presence', peerId }` in this playground). Without a TURN server, peers behind restrictive NATs or firewalls may not connect; there is no TURN in this repo.
 
-## MVP status and limits
-Implemented: in-memory rooms (up to 8), presence, lobby, chat, event stream, manual player transforms, generic game events, PeerJS voice preview.
+### Known limits
 
-Not implemented: authoritative simulation, automatic high-frequency position transport, spatial attenuation, push-to-talk, dedicated TURN configuration, persistent sessions, authentication, participant moderation, rate limits, and production multi-instance deployment. Existing Experience Creator Participate integration has **not** been changed.
+- No self-registration: an admin provisions host accounts.
+- A kicked guest loses its membership and token scope, but can join again as a new guest with the room code.
+- Polling latency (the playground uses 3 s) applies to chat and events.
 
-**Security:** This is a development playground, not production-ready. Tokens in SSE query parameters may be logged by infrastructure. API origin is unrestricted by default, with `CONNECT_ORIGIN` configurable. An external authentication layer, origin validation, event authorization, per-participant rate limits, and dedicated TURN servers are required before deployment to untrusted users.
+## Legacy playground server
 
-Keep `master` unchanged until tested. The frontend is an Astro/React development console; the standalone backend must run as a persistent Node process, not a stateless serverless function.
+`cd server && npm start` runs `server/connect.mjs` on `:8787` (in-memory rooms, SSE events, `x-connect-token`). It is a development preview without auth, persistence or rate limits; keep it off untrusted networks.
