@@ -22,7 +22,7 @@ export default async function handler(req,res){
   if(action==='bootstrap'){
    if(req.method!=='POST'||!process.env.CONNECT_BOOTSTRAP_KEY||b.bootstrapKey!==process.env.CONNECT_BOOTSTRAP_KEY)return error(res,403,'BOOTSTRAP_DENIED');
    if((await q`SELECT id FROM connect_users WHERE role='admin' LIMIT 1`).length)return error(res,409,'ADMIN_EXISTS');
-   if(typeof b.email!=='string'||!/^\\S+@\\S+\\.\\S+$/.test(b.email)||typeof b.password!=='string'||b.password.length<12)return error(res,400,'INVALID_CREDENTIALS');
+   if(typeof b.email!=='string'||!/^\S+@\S+\.\S+$/.test(b.email)||typeof b.password!=='string'||b.password.length<12)return error(res,400,'INVALID_CREDENTIALS');
    const uid=id(),email=b.email.toLowerCase(),h=mkhash(b.password);
    await q`INSERT INTO connect_users VALUES(${uid},${email},${h},'admin')`;
    return res.status(201).json({email,role:'admin',token:await sign(uid)});
@@ -72,7 +72,7 @@ export default async function handler(req,res){
    return res.status(201).json({id:r[0].id});
   }
   if(action==='events'){
-   const since=String(req.query.since||'0');if(!/^\\d+$/.test(since))return error(res,400,'INVALID_CURSOR');
+   const since=String(req.query.since||'0');if(!/^\d+$/.test(since))return error(res,400,'INVALID_CURSOR');
    const events=await q`SELECT id::text,user_id,kind,body FROM connect_events WHERE code=${code} AND id>${since}::bigint ORDER BY id LIMIT 100`;
    return res.json({events,next:events.at(-1)?.id||since});
   }
