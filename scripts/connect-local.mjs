@@ -23,6 +23,7 @@ export async function startLocalConnect(opts = {}) {
     ...opts.env,
   };
   const db = new PGlite(opts.dataDir ?? process.env.CONNECT_DATA);
+  await db.query('SELECT 1'); // initialise now (it inspects the environment on first use)
   // Neon-compatible tagged template: q`SELECT ... ${value}` → rows.
   const q = async (strings, ...values) => {
     let text = '';
