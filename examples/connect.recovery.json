@@ -1,26 +1,42 @@
 {
   "schema": "braidata.connect.v1",
   "room": {
-    "persistent": true,
-    "hostRecovery": {
+    "mode": "persistent",
+    "host": {
+      "authentication": "neon-postgres-jwt",
+      "recoverable": true,
+      "saveSnapshot": true
+    },
+    "guests": {
       "enabled": true,
-      "identity": "authenticated-owner",
-      "sameCode": true,
-      "snapshot": true
+      "entry": "invite-link",
+      "urlPattern": "?room={code}",
+      "auth": "room-scoped-signed-jwt",
+      "displayNameRequired": true,
+      "persistIdentity": "browser-local-storage",
+      "privileges": [
+        "chat.message",
+        "player.input",
+        "read.room",
+        "read.events"
+      ],
+      "restricted": [
+        "create",
+        "resume",
+        "snapshot",
+        "game.event",
+        "kick"
+      ],
+      "hostCanKick": true
+    },
+    "events": {
+      "transport": "http-polling",
+      "pollMs": 3500,
+      "persisted": true
+    },
+    "voice": {
+      "transport": "peerjs",
+      "note": "separate experimental P2P playground"
     }
-  },
-  "auth": {
-    "backend": "neon-postgres",
-    "mode": "admin-bootstrap"
-  },
-  "transport": {
-    "control": "vercel-functions",
-    "events": "polling",
-    "realtime": "peerjs-experimental"
-  },
-  "events": [
-    "chat.message",
-    "player.input",
-    "game.event"
-  ]
+  }
 }
