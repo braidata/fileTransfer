@@ -1,12 +1,12 @@
 import React, {useEffect,useRef,useState} from 'react';
 import Peer from 'peerjs';
 
-const defaultApi='http://localhost:8787';
+const defaultApi=import.meta.env.PUBLIC_CONNECT_API_URL || (typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:8787' : '');
 export default function Playground(){
  const [api,setApi]=useState(defaultApi),[name,setName]=useState('Explorer'),[roomCode,setRoomCode]=useState(''),[room,setRoom]=useState(null),[token,setToken]=useState(''),[self,setSelf]=useState(''),[status,setStatus]=useState('Disconnected'),[messages,setMessages]=useState([]),[message,setMessage]=useState(''),[events,setEvents]=useState([]),[myPeer,setMyPeer]=useState(''),[voice,setVoice]=useState(false),[micState,setMicState]=useState('Off'),[error,setError]=useState(''),[coords,setCoords]=useState({x:0,y:0,z:0,ry:0,ready:false});
  const peerRef=useRef(null),streamRef=useRef(null),audioRef=useRef(new Map()),callsRef=useRef(new Map()),sessionRef=useRef({}),sourceRef=useRef(null);
  sessionRef.current={api,token,code:room?.code,self};
- const request=async(path,body,auth=token)=>{const r=await fetch(api.replace(/\/$/,'')+path,{method:'POST',headers:{'content-type':'application/json',...(auth?{'x-connect-token':auth}:{})},body:JSON.stringify(body)});const v=await r.json();if(!r.ok)throw new Error(v.error||r.statusText);return v;};
+ const request=async(path,body,auth=token)=>{if(!api)throw new Error('Connect API is not deployed. Configure PUBLIC_CONNECT_API_URL with the persistent backend URL.');const r=await fetch(api.replace(/\/$/,'')+path,{method:'POST',headers:{'content-type':'application/json',...(auth?{'x-connect-token':auth}:{})},body:JSON.stringify(body)});const v=await r.json();if(!r.ok)throw new Error(v.error||r.statusText);return v;};
  const report=fn=>async(...a)=>{try{setError('');await fn(...a);}catch(e){setError(e.message);}};
  const connect=async(join=false)=>{
   const v=join?await request('/api/rooms/'+roomCode.trim().toUpperCase()+'/join',{name},''):await request('/api/rooms',{name,title:'Braidata Connect Playground',maxPlayers:4},'');
