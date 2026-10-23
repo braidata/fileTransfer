@@ -13,6 +13,7 @@ async function setup(q){
 }
 const mkhash=p=>{const salt=id();return salt+':'+scryptSync(p,salt,64).toString('hex')};
 const check=(p,v)=>{const [s,h]=v.split(':');const a=scryptSync(p,s,64),b=Buffer.from(h,'hex');return a.length===b.length&&timingSafeEqual(a,b)};
+const safeEqualSecret=(a,b)=>{const x=Buffer.from(a),y=Buffer.from(b);return x.length===y.length&&timingSafeEqual(x,y)};
 const sign=uid=>new SignJWT({}).setProtectedHeader({alg:'HS256'}).setSubject(uid).setIssuedAt().setExpirationTime('7d').sign(key());
 export default async function handler(req,res){
  try{
@@ -20,7 +21,7 @@ export default async function handler(req,res){
   const q=db();await setup(q);const action=String(req.query.action||'health'),b=req.body||{};
   if(action==='health')return res.json({ok:true,storage:'neon',service:'Braidata Connect'});
   if(action==='bootstrap'){
-   if(req.method!=='POST'||!process.env.CONNECT_BOOTSTRAP_KEY||b.bootstrapKey!==process.env.CONNECT_BOOTSTRAP_KEY)return error(res,403,'BOOTSTRAP_DENIED');
+   if(req.method!=='POST'||!process.env.CONNECT_BOOTSTRAP_KEY||typeof b.bootstrapKey!=='string'||!safeEqualSecret(b.bootstrapKey.trim(),process.env.CONNECT_BOOTSTRAP_KEY.trim()))return error(res,403,'BOOTSTRAP_DENIED');
    if((await q`SELECT id FROM connect_users WHERE role='admin' LIMIT 1`).length)return error(res,409,'ADMIN_EXISTS');
    if(typeof b.email!=='string'||!/^\S+@\S+\.\S+$/.test(b.email)||typeof b.password!=='string'||b.password.length<12)return error(res,400,'INVALID_CREDENTIALS');
    const uid=id(),email=b.email.toLowerCase(),h=mkhash(b.password);
