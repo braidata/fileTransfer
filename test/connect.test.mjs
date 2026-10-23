@@ -155,6 +155,42 @@ test('room capacity: members (host included) up to capacity; the rest get ROOM_F
   assert.equal((await api('create', { body: { title: 'x', capacity: 1 }, token: s.host })).status, 400);
 });
 
+test('quick room: no account; the owner is host of that room only; guests join as usual', async () => {
+  assert.equal((await api('quick-create', { body: { name: 'x' } })).status, 400);
+  const r = await api('quick-create', { body: { name: 'Ivan', title: 'Rapida', capacity: 4 } });
+  assert.equal(r.status, 201);
+  assert.match(r.json.code, /^[A-F0-9]{8}$/);
+  assert.ok(r.json.expiresAt && r.json.token);
+  const qh = r.json.token;
+  const room = await api('room', { query: { code: r.json.code }, token: qh });
+  assert.equal(room.json.host, true);
+  assert.equal((await api('publish', { body: { code: r.json.code, kind: 'game.event', data: { type: 'state' } }, token: qh })).status, 201);
+  assert.equal((await api('snapshot', { body: { code: r.json.code, state: { v: 1 } }, token: qh })).status, 200);
+  assert.equal((await api('resume', { body: { code: r.json.code }, token: qh })).status, 200);
+  const g = (await api('guest-join', { body: { code: r.json.code, name: 'Ana' } })).json;
+  assert.equal((await api('kick', { body: { code: r.json.code, userId: g.userId }, token: qh })).status, 200);
+  // Scoped: no other room, no new rooms, no login, no admin.
+  assert.equal((await api('room', { query: { code }, token: qh })).status, 403);
+  assert.equal((await api('create', { body: { title: 'otra' }, token: qh })).status, 403);
+  assert.equal((await api('join', { body: { code }, token: qh })).status, 403);
+  assert.equal((await api('admin-users', { token: qh })).status, 403);
+  assert.equal((await api('login', { body: { email: `quick-${r.json.userId}@connect.internal`, password: '!login-disabled' } })).status, 401);
+});
+
+test('quick rooms are rate-limited per client address', async () => {
+  let last = 0;
+  for (let i = 0; i < 25; i += 1) last = (await api('quick-create', { body: { name: `Sala ${i}` } })).status;
+  assert.equal(last, 429);
+});
+
+test('admin password reset with the bootstrap key', async () => {
+  assert.equal((await api('admin-reset', { body: { email: ADMIN.email, password: 'brand-new-password-1', bootstrapKey: 'nope' } })).status, 403);
+  assert.equal((await api('admin-reset', { body: { email: 'host@connect.test', password: 'brand-new-password-1', bootstrapKey: s.env.CONNECT_BOOTSTRAP_KEY } })).status, 404);
+  assert.equal((await api('admin-reset', { body: { email: ADMIN.email, password: 'brand-new-password-1', bootstrapKey: s.env.CONNECT_BOOTSTRAP_KEY } })).status, 200);
+  assert.equal((await api('login', { body: ADMIN })).status, 401);
+  assert.equal((await api('login', { body: { ...ADMIN, password: 'brand-new-password-1' } })).status, 200);
+});
+
 test('invalid codes and cursors are rejected', async () => {
   assert.equal((await api('room', { query: { code: "AB'; DROP" }, token: s.host })).status, 400);
   assert.equal((await api('events', { query: { code, since: '1;2' }, token: s.host })).status, 400);
@@ -164,5 +200,5 @@ test('invalid codes and cursors are rejected', async () => {
 test('admin-only user management stays admin-only', async () => {
   assert.equal((await api('admin-users', { token: s.host })).status, 403);
   assert.equal((await api('admin-users', { token: guest.token })).status, 403);
-  assert.equal((await api('admin-users', { token: admin })).status, 200);
+  assert.equal((await api('admin-users', { token: admin })).status, 200); // admin token still valid after a reset (JWT)
 });

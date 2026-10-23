@@ -21,6 +21,8 @@ Auth: `Authorization: Bearer <JWT>` (HS256, 7 days). Hosts/admins get a user tok
 | `guest-join` | POST | anyone | `{ code, name }` → `{ code, name, role:'guest', userId, token }`; announces a member event |
 | `me` | GET | token | `{ user: { id, email, role } }` |
 | `admin-users`, `admin-create-user`, `admin-delete-user` | GET/POST | admin | user management. Hosts are provisioned by an admin (`admin-create-user {email,password}` → role `host`). Not for gameplay UIs. |
+| `quick-create` | POST | anyone | `{ name, title, capacity? }` → `{ code, token, userId, expiresAt }`: a room without an account. Its owner is a one-room identity (token scoped to that room, never a login). Expires after `CONNECT_QUICK_TTL_HOURS` (48); `CONNECT_QUICK_PER_HOUR` (20) per client address; `CONNECT_QUICK_ROOMS=off` disables it |
+| `admin-reset` | POST | holder of `CONNECT_BOOTSTRAP_KEY` | `{ email, password, bootstrapKey }`: new password for an existing admin (lost password) |
 | `create` | POST | admin / host | `{ title, name }` → `{ code, title }` (code `^[A-F0-9]{8}$`) |
 | `join` | POST | admin / host | joins a room as a member (guests use `guest-join`) |
 | `room` | GET | member | `{ room, host, role, currentUser, players[{user_id,name,role,idle}] }` |
@@ -61,7 +63,7 @@ Connect Cloud is HTTP: chat, events and snapshots are persisted and **polled**. 
 
 ### Known limits
 
-- No self-registration: an admin provisions host accounts.
+- Persistent rooms need an account (an admin provisions hosts). Quick rooms need none but expire.
 - A kicked guest loses its membership and token scope, but can join again as a new guest with the room code.
 - Polling latency (the playground uses 3 s) applies to chat and events.
 
