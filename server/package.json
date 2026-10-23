@@ -1,0 +1,13 @@
+{
+  "name": "@braidata/connect-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node connect.mjs",
+    "dev": "node --watch connect.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

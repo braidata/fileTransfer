@@ -1,0 +1,31 @@
+{
+  "schema": "braidata.connect.v1",
+  "id": "coop-four",
+  "name": "Four Player Playground",
+  "room": {
+    "mode": "private",
+    "maxPlayers": 4,
+    "join": "code"
+  },
+  "chat": {
+    "enabled": true,
+    "maxMessageLength": 500
+  },
+  "voice": {
+    "enabled": true,
+    "transport": "webrtc",
+    "spatial": "planned"
+  },
+  "multiplayer": {
+    "enabled": true,
+    "authority": "host",
+    "sync": [
+      "player.transform",
+      "game.event"
+    ]
+  },
+  "integration": {
+    "provider": "experience-creator",
+    "status": "planned"
+  }
+}
