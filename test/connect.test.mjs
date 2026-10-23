@@ -147,6 +147,14 @@ test('presence: polling marks a member as seen; never-polled members have no idl
   assert.ok(!('email' in host));
 });
 
+test('room capacity: members (host included) up to capacity; the rest get ROOM_FULL', async () => {
+  const r = await api('create', { body: { title: 'Cupo', name: 'Host', capacity: 2 }, token: s.host });
+  assert.equal(r.json.capacity, 2);
+  assert.equal((await api('guest-join', { body: { code: r.json.code, name: 'Uno' } })).status, 201);
+  assert.equal((await api('guest-join', { body: { code: r.json.code, name: 'Dos' } })).status, 409);
+  assert.equal((await api('create', { body: { title: 'x', capacity: 1 }, token: s.host })).status, 400);
+});
+
 test('invalid codes and cursors are rejected', async () => {
   assert.equal((await api('room', { query: { code: "AB'; DROP" }, token: s.host })).status, 400);
   assert.equal((await api('events', { query: { code, since: '1;2' }, token: s.host })).status, 400);
