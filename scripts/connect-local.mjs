@@ -20,6 +20,8 @@ export async function startLocalConnect(opts = {}) {
     CONNECT_BOOTSTRAP_KEY: process.env.CONNECT_BOOTSTRAP_KEY ?? 'local-bootstrap-key',
     CONNECT_ORIGINS: process.env.CONNECT_ORIGINS,
     CONNECT_RATE_LIMIT: process.env.CONNECT_RATE_LIMIT,
+    CONNECT_AUTHORITY_LEASE_SEC: process.env.CONNECT_AUTHORITY_LEASE_SEC,
+    CONNECT_WORLD_MAX: process.env.CONNECT_WORLD_MAX,
     ...opts.env,
   };
   const db = new PGlite(opts.dataDir ?? process.env.CONNECT_DATA);

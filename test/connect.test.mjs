@@ -9,7 +9,7 @@ let api;
 const ADMIN = { email: 'admin@connect.test', password: 'correct-horse-battery' };
 
 before(async () => {
-  s = await startLocalConnect({ port: 0, peer: false, env: { CONNECT_RATE_LIMIT: '8' } });
+  s = await startLocalConnect({ port: 0, peer: false, env: { CONNECT_RATE_LIMIT: '8', CONNECT_AUTHORITY_LEASE_SEC: '3' } });
   api = async (action, { body, token, method = body ? 'POST' : 'GET', query = {}, origin } = {}) => {
     const qs = new URLSearchParams({ action, ...query });
     const r = await fetch(`${s.url}/api/connect?${qs}`, {
@@ -175,6 +175,39 @@ test('quick room: no account; the owner is host of that room only; guests join a
   assert.equal((await api('join', { body: { code }, token: qh })).status, 403);
   assert.equal((await api('admin-users', { token: qh })).status, 403);
   assert.equal((await api('login', { body: { email: `quick-${r.json.userId}@connect.internal`, password: '!login-disabled' } })).status, 401);
+});
+
+test('world authority: one holder at a time with growing epochs; only it writes the world; a lapsed lease passes on', async () => {
+  const r = (await api('quick-create', { body: { name: 'Duena', title: 'Mundo' } })).json;
+  const h = r.token;
+  const ga = (await api('guest-join', { body: { code: r.code, name: 'Ana' } })).json.token;
+  const gb = (await api('guest-join', { body: { code: r.code, name: 'Beto' } })).json.token;
+  const claim = (t) => api('authority', { body: { code: r.code }, token: t });
+  assert.equal((await api('world', { query: { code: r.code }, token: ga })).json.world, null);
+  const a1 = await claim(ga);
+  assert.deepEqual([a1.status, a1.json.authority.epoch], [200, 1]);
+  const b1 = await claim(gb); // held and fresh: refused, with the holder
+  assert.deepEqual([b1.status, b1.json.granted, b1.json.authority.epoch], [409, false, 1]);
+  assert.equal((await claim(ga)).json.authority.epoch, 1); // renewing keeps the epoch
+  assert.equal((await api('world-save', { body: { code: r.code, rev: 1, epoch: 1, state: { wv: 1 } }, token: gb })).json.error, 'NOT_AUTHORITY');
+  assert.equal((await api('world-save', { body: { code: r.code, rev: 5, epoch: 1, state: { wv: 1, ht: 3 } }, token: ga })).status, 200);
+  const w = (await api('world', { query: { code: r.code }, token: gb })).json;
+  assert.deepEqual([w.rev, w.world.ht], [5, 3]);
+  const stale = await api('world-save', { body: { code: r.code, rev: 3, epoch: 1, state: { wv: 1 } }, token: ga });
+  assert.deepEqual([stale.status, stale.json.rev], [409, 5]);
+  assert.equal((await api('world-save', { body: { code: r.code, rev: 6, epoch: 1, state: { big: 'x'.repeat(61000) } }, token: ga })).status, 413);
+  // The holder stops renewing: after the lease anyone may take it (epoch 2), and the former holder can no longer write.
+  await new Promise((ok) => setTimeout(ok, 3500));
+  const ev = (await api('events', { query: { code: r.code, since: '0' }, token: gb })).json;
+  assert.equal(ev.authority.user, null);
+  const b2 = await claim(gb);
+  assert.deepEqual([b2.status, b2.json.authority.epoch], [200, 2]);
+  assert.equal((await api('world-save', { body: { code: r.code, rev: 9, epoch: 1, state: { wv: 1 } }, token: ga })).json.error, 'NOT_AUTHORITY');
+  // The owner (room host) takes it over at once: epoch 3.
+  const h3 = await claim(h);
+  assert.deepEqual([h3.status, h3.json.authority.user === b2.json.authority.user, h3.json.authority.epoch], [200, false, 3]);
+  assert.equal((await api('authority-release', { body: { code: r.code }, token: h })).status, 200);
+  assert.equal((await api('world', { query: { code }, token: ga })).status, 403);
 });
 
 test('quick rooms are rate-limited per client address', async () => {
