@@ -210,6 +210,36 @@ test('world authority: one holder at a time with growing epochs; only it writes 
   assert.equal((await api('world', { query: { code }, token: ga })).status, 403);
 });
 
+test('cost: the holder renews the lease inside its events poll; polls and room info never carry the world', async () => {
+  const r = (await api('quick-create', { body: { name: 'Duena', title: 'Barato' } })).json;
+  const ga = (await api('guest-join', { body: { code: r.code, name: 'Ana' } })).json.token;
+  const gb = (await api('guest-join', { body: { code: r.code, name: 'Beto' } })).json.token;
+  assert.equal((await api('authority', { body: { code: r.code }, token: ga })).status, 200);
+  assert.equal((await api('world-save', { body: { code: r.code, rev: 1, epoch: 1, state: { wv: 1, big: 'x'.repeat(20000) } }, token: ga })).status, 200);
+  // Renewing through the poll for longer than the lease (3 s in tests): the holder keeps it, nobody else may claim.
+  for (let i = 0; i < 4; i += 1) {
+    const ev = (await api('events', { query: { code: r.code, since: '0', renew: '1' }, token: ga })).json;
+    assert.equal(typeof ev.leaseSec, 'number');
+    assert.equal(JSON.stringify(ev).includes('xxxxxxxxxx'), false);
+    await new Promise((ok) => setTimeout(ok, 1200));
+  }
+  const b = await api('authority', { body: { code: r.code }, token: gb });
+  assert.deepEqual([b.status, b.json.granted], [409, false]);
+  // renew=1 from someone who does not hold it changes nothing.
+  await api('events', { query: { code: r.code, since: '0', renew: '1' }, token: gb });
+  const room = (await api('room', { query: { code: r.code }, token: gb })).json;
+  assert.equal(room.room.world, undefined);
+  assert.equal(room.room.member_name, undefined);
+  assert.equal(JSON.stringify(room).includes('xxxxxxxxxx'), false);
+  // The world itself is still there for whoever asks for it.
+  assert.equal((await api('world', { query: { code: r.code }, token: gb })).json.world.big.length, 20000);
+  // Leaving: the last save and the release in one call; the lease is free at once.
+  assert.equal((await api('world-save', { body: { code: r.code, rev: 2, epoch: 1, state: { wv: 1, last: true }, release: true }, token: ga })).status, 200);
+  const free = (await api('events', { query: { code: r.code, since: '0' }, token: gb })).json;
+  assert.equal(free.authority.user, null);
+  assert.equal((await api('world', { query: { code: r.code }, token: gb })).json.world.last, true);
+});
+
 test('quick rooms are rate-limited per client address', async () => {
   let last = 0;
   for (let i = 0; i < 25; i += 1) last = (await api('quick-create', { body: { name: `Sala ${i}` } })).status;
